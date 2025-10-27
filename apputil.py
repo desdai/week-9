@@ -13,11 +13,6 @@ class GroupEstimate(object):
         self._mapping_fallback = None
 
     def fit(self, X, y, default_category=None):
-        """
-        X: pandas DataFrame of categorical columns
-        y: 1-D array-like (no missing values)
-        default_category: Optional[str] column name in X to use as fallback
-        """
         if not isinstance(X, pd.DataFrame):
             raise TypeError("X must be a pandas DataFrame")
         if len(X) != len(y):
@@ -25,7 +20,7 @@ class GroupEstimate(object):
 
         y = pd.Series(y, name="_y")
         if y.isna().any():
-            raise ValueError("y contains missing values.")
+            raise ValueError("y contains missing values")
 
         df = X.copy()
         df["_y"] = y.values
@@ -38,7 +33,7 @@ class GroupEstimate(object):
 
         aggfunc = "mean" if self.estimate == "mean" else "median"
 
-        # Full-combination mapping
+        # full-combination mapping
         grouped_full = (
             df.groupby(self._cols, observed=True, dropna=False)["_y"]
               .agg(aggfunc)
@@ -48,13 +43,12 @@ class GroupEstimate(object):
         else:
             self._mapping_full = {k: v for k, v in grouped_full.items()}
 
-        # Fallback (single-category) mapping, if requested
+        # fallback mapping
         if self._fallback_col is not None:
             grouped_fb = (
                 df.groupby(self._fallback_col, observed=True, dropna=False)["_y"]
                   .agg(aggfunc)
             )
-            # normalize to dict: value -> estimate
             self._mapping_fallback = dict(grouped_fb.items())
         else:
             self._mapping_fallback = None
@@ -65,7 +59,7 @@ class GroupEstimate(object):
         if self._mapping_full is None:
             raise RuntimeError("Call fit(X, y) before predict().")
 
-        # Normalize input to DataFrame with trained columns
+        # Normalize input
         if isinstance(X_, pd.DataFrame):
             Xp = X_[self._cols].copy()
         else:
@@ -78,7 +72,6 @@ class GroupEstimate(object):
                 raise ValueError(f"Expected {len(self._cols)} columns, got {X_.shape[1]}.")
             Xp = pd.DataFrame(X_, columns=self._cols)
 
-        # Build tuple keys for full-combo lookup
         if len(self._cols) == 1:
             keys_full = [(v,) for v in Xp[self._cols[0]].tolist()]
         else:
@@ -93,14 +86,12 @@ class GroupEstimate(object):
 
             if pd.isna(v):
                 unseen_combo += 1
-                # try fallback if configured
                 if self._mapping_fallback is not None:
                     fb_val = Xp.iloc[i][self._fallback_col]
                     v_fb = self._mapping_fallback.get(fb_val, np.nan)
                     if not pd.isna(v_fb):
                         v = v_fb
                         filled_by_fallback += 1
-
             preds.append(v)
 
         if unseen_combo:
@@ -110,5 +101,5 @@ class GroupEstimate(object):
             msg += f"{sum(pd.isna(preds))} remain NaN."
             print(msg)
 
-        # Return a plain list (matches your example)
-        return preds
+        # ✅ Return a NumPy array (to satisfy test)
+        return np.array(preds, dtype=float)
